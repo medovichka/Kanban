@@ -1,0 +1,9 @@
+/vendor
+/logs/*
+/db/*
+*.sqlite
+*.slite3
+*.log
+*.*journal
+*.swp
+!/db/migrations

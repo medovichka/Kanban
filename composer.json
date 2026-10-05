@@ -1,0 +1,21 @@
+{
+    "name": "killo/kanbak",
+    "require": {
+        "illuminate/database": "^13.34",
+        "robmorgan/phinx": "^0.16.12",
+        "monolog/monolog": "^3.12",
+        "symfony/yaml": "^8.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Killo\\kanbak\\": "src/",
+            "App\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Medovichka",
+            "email": "killopolop03@gmail.com"
+        }
+    ]
+}
