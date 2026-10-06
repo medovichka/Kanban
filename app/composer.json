@@ -1,6 +1,10 @@
 {
     "name": "killo/kanbak",
+    "description": "Kanban",
+    "type": "project",
     "require": {
+        "php": ">=8.5",
+        "ext-pdo_sqlite": "*",
         "illuminate/database": "^13.34",
         "robmorgan/phinx": "^0.16.12",
         "monolog/monolog": "^3.12",
@@ -8,7 +12,6 @@
     },
     "autoload": {
         "psr-4": {
-            "Killo\\kanbak\\": "src/",
             "App\\": "src/"
         }
     },

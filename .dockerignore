@@ -1,0 +1,5 @@
+.git
+.env
+vendor
+app/vendor
+.DS_Store
