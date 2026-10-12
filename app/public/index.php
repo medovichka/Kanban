@@ -4,23 +4,25 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use App\Config;
 use App\Models\User;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Monolog\Handler\StreamHandler;
-use Monolog\Level;
 use Monolog\Logger;
 
-$logger = new Logger('http');
+Config::load(__DIR__ . '/../config/config.php');
+
+$logger = new Logger((string) Config::get('logging.name', 'http'));
 $logger->pushHandler(new StreamHandler(
-    __DIR__ . '/../logs/app.log',
-    Level::Debug
+    (string) Config::get('logging.path'),
+    Logger::toMonologLevel((string) Config::get('logging.level', 'debug'))
 ));
 
 $capsule = new Capsule;
 $capsule->addConnection([
-    'driver'   => 'sqlite',
-    'database' => __DIR__ . '/../db/database.sqlite3',
-    'prefix'   => '',
+    'driver'   => (string) Config::get('db.driver', 'sqlite'),
+    'database' => (string) Config::get('db.database'),
+    'prefix'   => (string) Config::get('db.prefix', ''),
 ]);
 $capsule->setAsGlobal();
 $capsule->bootEloquent();
@@ -63,12 +65,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'CLI') === 'POST' && isset($_POST['name'], $_
     $dbError = null;
     $sqliteVersion = null;
     $users = [];
+    $tables = [];
+    $tableCounts = [];
 
     try {
         $sqliteVersion = (string) Capsule::connection()
             ->getPdo()
             ->query('SELECT sqlite_version()')
             ->fetchColumn();
+
+        $tables = Capsule::connection()->getSchemaBuilder()->getTableListing(null, false);
+        sort($tables);
+
+        foreach ($tables as $table) {
+            $tableCounts[$table] = Capsule::connection()->table($table)->count();
+        }
 
         $users = User::orderByDesc('id')->get()->all();
     } catch (\Throwable $e) {
@@ -85,7 +96,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'CLI') === 'POST' && isset($_POST['name'], $_
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Kanban</title>
+    <title><?= h((string) Config::get('app.name', 'Kanban')) ?></title>
     <style>
         body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1c1c1c; }
         h1 { font-size: 1.4rem; }
@@ -107,7 +118,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'CLI') === 'POST' && isset($_POST['name'], $_
     </style>
 </head>
 <body>
-    <h1>Kanban</h1>
+    <h1><?= h((string) Config::get('app.name', 'Kanban')) ?></h1>
 
     <dl>
         <dt>Версия PHP</dt>
@@ -127,6 +138,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'CLI') === 'POST' && isset($_POST['name'], $_
 
     <?php if ($isError): ?>
         <p class="notice notice-error">Не удалось сохранить запись. Проверьте, что имя и email не пустые, а email ещё не используется.</p>
+    <?php endif; ?>
+
+    <h2>Таблицы в БД</h2>
+    <?php if ($tables): ?>
+        <table>
+            <tr><th>таблица</th><th>строк</th></tr>
+            <?php foreach ($tables as $table): ?>
+                <tr>
+                    <td><?= h($table) ?></td>
+                    <td><?= h((string) ($tableCounts[$table] ?? 0)) ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
+    <?php else: ?>
+        <p>Таблицы не найдены (БД недоступна или миграции не применены).</p>
     <?php endif; ?>
 
     <h2>Таблица users</h2>

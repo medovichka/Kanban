@@ -29,6 +29,10 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
     image: ${DOCKERHUB_NAMESPACE}/devops-course-php:${IMAGE_TAG}
+    environment:
+      # Ключ шифрования конфига: compose подставляет значение из .env,
+      # PHP читает его через getenv('APP_KEY') (см. clear_env = no в www.conf)
+      APP_KEY: ${APP_KEY:-}
     volumes:
       # Без :ro - сюда пишет composer install (vendor/) и SQLite-файл БД
       - ./app:/var/www/html
