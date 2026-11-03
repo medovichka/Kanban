@@ -2,208 +2,64 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
-use App\Config;
-use App\Models\User;
-use Illuminate\Database\Capsule\Manager as Capsule;
-use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
+use App\Bootstrap\Application;
+use App\Container;
+use App\Http\Request;
+use App\Http\Response;
+use App\Routing\Exceptions\MethodNotAllowedException;
+use App\Routing\Exceptions\RouteNotFoundException;
+use App\Routing\Router;
 
-Config::load(__DIR__ . '/../config/config.php');
+$instrumentation = require __DIR__ . '/../instrumentation/instrument.php';
 
-$logger = new Logger((string) Config::get('logging.name', 'http'));
-$logger->pushHandler(new StreamHandler(
-    (string) Config::get('logging.path'),
-    Logger::toMonologLevel((string) Config::get('logging.level', 'debug'))
-));
+$route = 'unknown';
+$start = hrtime(true);
+$container = null;
+$response = null;
 
-$capsule = new Capsule;
-$capsule->addConnection([
-    'driver'   => (string) Config::get('db.driver', 'sqlite'),
-    'database' => (string) Config::get('db.database'),
-    'prefix'   => (string) Config::get('db.prefix', ''),
-]);
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
-$capsule->getConnection()->getPdo()->exec('PRAGMA foreign_keys = ON;');
+try {
+    $container = Application::boot();
 
-function h(string $value): string
-{
-    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-}
-
-$input = file_get_contents('php://input');
-$location = null;
-
-if (($_SERVER['REQUEST_METHOD'] ?? 'CLI') === 'POST' && isset($_POST['name'], $_POST['email'])) {
-    $name = trim((string) $_POST['name']);
-    $email = trim((string) $_POST['email']);
-    $password = (string) ($_POST['password'] ?? '');
-
-    try {
-        User::create([
-            'name'     => $name,
-            'email'    => $email,
-            'password' => $password === ''
-                ? null
-                : password_hash($password, PASSWORD_DEFAULT),
-        ]);
-        $location = '/';
-    } catch (\Throwable $e) {
-        $logger->error('Failed to create user', ['exception' => $e]);
-        $location = '/?error=1';
+    if (isset($instrumentation['register'])) {
+        ($instrumentation['register'])();
     }
 
-    header('Location: ' . $location);
-    $responseBody = '';
-} else {
-    $phpVersion = PHP_VERSION;
-    $hasPdoSqlite = extension_loaded('pdo_sqlite');
-    $hostname = (string) gethostname();
+    $request = Request::fromGlobals($_SERVER, $_GET, $_POST, $_COOKIE);
 
-    $dbError = null;
-    $sqliteVersion = null;
-    $users = [];
-    $tables = [];
-    $tableCounts = [];
+    $router = (static function (): Router {
+        $router = new Router();
+        $routes = require __DIR__ . '/../config/routes.php';
+        $routes($router);
+
+        return $router;
+    })();
+
+    $response = $router->dispatch($request);
+    $route = $router->matchedRouteName() ?? 'unknown';
+} catch (MethodNotAllowedException $e) {
+    $route = 'method_not_allowed';
+    $response = Response::html('<h1>405</h1><p>Метод не поддерживается.</p>', 405)
+        ->withHeader('Allow', implode(', ', $e->allowed));
+} catch (RouteNotFoundException $e) {
+    $route = 'not_found';
+    $response = Response::html('<h1>404</h1><p>Страница не найдена.</p>', 404);
+} catch (\Throwable $e) {
+    $route = 'error';
+    $response = Response::html('<h1>500</h1><p>Внутренняя ошибка сервера.</p>', 500);
 
     try {
-        $sqliteVersion = (string) Capsule::connection()
-            ->getPdo()
-            ->query('SELECT sqlite_version()')
-            ->fetchColumn();
-
-        $tables = Capsule::connection()->getSchemaBuilder()->getTableListing(null, false);
-        sort($tables);
-
-        foreach ($tables as $table) {
-            $tableCounts[$table] = Capsule::connection()->table($table)->count();
-        }
-
-        $users = User::orderByDesc('id')->get()->all();
-    } catch (\Throwable $e) {
-        $dbError = $e->getMessage();
-        $logger->error('Failed to read users', ['exception' => $e]);
+        ($container instanceof Container ? $container : Container::application())
+            ->logger()
+            ->error('Unhandled exception', ['exception' => $e, 'route' => $route]);
+    } catch (\Throwable $logError) {
+        error_log('index: ' . $e->getMessage() . ' | logger: ' . $logError->getMessage());
     }
-
-    $isError = isset($_GET['error']);
-
-    ob_start();
-    ?>
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= h((string) Config::get('app.name', 'Kanban')) ?></title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1c1c1c; }
-        h1 { font-size: 1.4rem; }
-        h2 { font-size: 1.1rem; margin-top: 2rem; }
-        dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; background: #f6f6f6; padding: 1rem; border-radius: 6px; }
-        dt { font-weight: 600; }
-        dd { margin: 0; }
-        .ok { color: #0a7a2f; }
-        .fail { color: #b00020; }
-        .notice { padding: 0.6rem 1rem; border-radius: 6px; margin: 1rem 0; }
-        .notice-error { background: #fde8ea; color: #b00020; }
-        table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
-        th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
-        th { background: #f0f0f0; }
-        form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.5rem; }
-        input[type=text], input[type=email], input[type=password] { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 0.5rem 1.2rem; border: 0; border-radius: 4px; background: #2563eb; color: #fff; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-    </style>
-</head>
-<body>
-    <h1><?= h((string) Config::get('app.name', 'Kanban')) ?></h1>
-
-    <dl>
-        <dt>Версия PHP</dt>
-        <dd><?= h($phpVersion) ?></dd>
-
-        <dt>Расширение pdo_sqlite</dt>
-        <dd class="<?= $hasPdoSqlite ? 'ok' : 'fail' ?>"><?= $hasPdoSqlite ? 'подключено' : 'отсутствует' ?></dd>
-
-        <dt>Хост контейнера</dt>
-        <dd><?= h($hostname) ?></dd>
-
-        <dt>Подключение к БД</dt>
-        <dd class="<?= $dbError === null ? 'ok' : 'fail' ?>">
-            <?= $dbError === null ? 'SQLite ' . h($sqliteVersion ?? '') : 'ошибка: ' . h($dbError) ?>
-        </dd>
-    </dl>
-
-    <?php if ($isError): ?>
-        <p class="notice notice-error">Не удалось сохранить запись. Проверьте, что имя и email не пустые, а email ещё не используется.</p>
-    <?php endif; ?>
-
-    <h2>Таблицы в БД</h2>
-    <?php if ($tables): ?>
-        <table>
-            <tr><th>таблица</th><th>строк</th></tr>
-            <?php foreach ($tables as $table): ?>
-                <tr>
-                    <td><?= h($table) ?></td>
-                    <td><?= h((string) ($tableCounts[$table] ?? 0)) ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
-    <?php else: ?>
-        <p>Таблицы не найдены (БД недоступна или миграции не применены).</p>
-    <?php endif; ?>
-
-    <h2>Таблица users</h2>
-    <?php if ($users): ?>
-        <table>
-            <tr><th>id</th><th>имя</th><th>email</th><th>создан</th></tr>
-            <?php foreach ($users as $user): ?>
-                <tr>
-                    <td><?= h((string) $user->id) ?></td>
-                    <td><?= h((string) $user->name) ?></td>
-                    <td><?= h((string) $user->email) ?></td>
-                    <td><?= h((string) $user->created_at) ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
-    <?php else: ?>
-        <p>Нет данных (таблица пуста или БД недоступна).</p>
-    <?php endif; ?>
-
-    <form method="post" action="/">
-        <input type="text" name="name" placeholder="Имя" required maxlength="100">
-        <input type="email" name="email" placeholder="Email" required maxlength="150">
-        <input type="password" name="password" placeholder="Пароль" maxlength="255">
-        <button type="submit">Добавить</button>
-    </form>
-</body>
-</html>
-    <?php
-    $responseBody = (string) ob_get_clean();
-
-    header('Content-Type: text/html; charset=utf-8');
 }
 
-$logger->info('Incoming HTTP request', [
-    'request' => [
-        'method'  => $_SERVER['REQUEST_METHOD'] ?? 'CLI',
-        'uri'     => $_SERVER['REQUEST_URI']    ?? '/',
-        'query'   => $_GET,
-        'body'    => $input,
-        'headers' => array_filter(
-            function_exists('getallheaders') ? getallheaders() : [],
-            static fn (string $name): bool => !in_array(
-                strtolower($name),
-                ['cookie', 'authorization'],
-                true
-            ),
-            ARRAY_FILTER_USE_KEY
-        ),
-        'ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
-    ],
-    'response' => $responseBody,
-]);
+if (isset($instrumentation['finish'])) {
+    ($instrumentation['finish'])($route, (hrtime(true) - $start) / 1e9);
+}
 
-echo $responseBody;
+$response->send();

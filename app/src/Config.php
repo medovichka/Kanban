@@ -6,12 +6,6 @@ namespace App;
 
 use RuntimeException;
 
-/**
- * Загрузчик статического конфига с поддержкой зашифрованных значений.
- *
- * Любая строка с префиксом "enc:" при загрузке прозрачно расшифровывается
- * (AES-256-GCM). Ключ берётся из переменной окружения APP_KEY (base64, 32 байта).
- */
 final class Config
 {
     private const PREFIX = 'enc:';
@@ -19,32 +13,36 @@ final class Config
     private const NONCE_LENGTH = 12;
     private const TAG_LENGTH = 16;
 
-    /** @var array<string, mixed>|null */
     private static ?array $items = null;
 
-    /**
-     * Загружает файл конфига и расшифровывает все значения с префиксом "enc:".
-     *
-     * @param string $path Путь до файла конфига, возвращающего массив.
-     */
-    public static function load(string $path): void
+    public static function load(string|array $source): void
     {
-        if (!is_file($path)) {
-            throw new RuntimeException('Config file not found: ' . $path);
+        $overrides = [];
+
+        if (is_array($source)) {
+            $overrides = (array) ($source['overrides'] ?? []);
+            $source = (string) ($source['path'] ?? '');
         }
 
-        $data = require $path;
+        if (!is_file($source)) {
+            throw new RuntimeException('Config file not found: ' . $source);
+        }
+
+        $data = require $source;
 
         if (!is_array($data)) {
-            throw new RuntimeException('Config file must return an array: ' . $path);
+            throw new RuntimeException('Config file must return an array: ' . $source);
         }
 
-        self::$items = self::decryptRecursive($data);
+        $data = self::decryptRecursive($data);
+
+        foreach ($overrides as $key => $value) {
+            $data[$key] = $value;
+        }
+
+        self::$items = $data;
     }
 
-    /**
-     * Возвращает значение по ключу в точечной нотации ("db.database").
-     */
     public static function get(string $key, mixed $default = null): mixed
     {
         if (self::$items === null) {
@@ -64,9 +62,6 @@ final class Config
         return $value;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public static function all(): array
     {
         if (self::$items === null) {
@@ -76,9 +71,6 @@ final class Config
         return self::$items;
     }
 
-    /**
-     * Шифрует значение и возвращает строку "enc:<base64>", пригодную для конфига.
-     */
     public static function encrypt(string $plaintext, ?string $key = null): string
     {
         $key ??= self::keyFromEnv();
@@ -102,9 +94,6 @@ final class Config
         return self::PREFIX . base64_encode($nonce . $tag . $ciphertext);
     }
 
-    /**
-     * Расшифровывает значение вида "enc:<base64>".
-     */
     public static function decrypt(string $payload, ?string $key = null): string
     {
         $key ??= self::keyFromEnv();
@@ -156,10 +145,6 @@ final class Config
         return $key;
     }
 
-    /**
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
     private static function decryptRecursive(array $data): array
     {
         $result = [];

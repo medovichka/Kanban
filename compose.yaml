@@ -2,14 +2,11 @@ services:
   nginx:
     build:
       context: ./docker/nginx
-    # build + image одновременно: собирается локально, но с тем же тегом,
-    # под которым образ будет виден в `docker images` (пригодится и для CI)
     image: ${DOCKERHUB_NAMESPACE}/devops-course-nginx:${IMAGE_TAG}
     ports:
       - "127.0.0.1:${NGINX_PORT:-8080}:80"
     volumes:
       - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
-      # Тот же код, что и в php, тем же путём - иначе SCRIPT_FILENAME не совпадёт
       - ./app:/var/www/html:ro
     depends_on:
       php:
@@ -30,19 +27,36 @@ services:
         GID: ${GID:-1000}
     image: ${DOCKERHUB_NAMESPACE}/devops-course-php:${IMAGE_TAG}
     environment:
-      # Ключ шифрования конфига: compose подставляет значение из .env,
-      # PHP читает его через getenv('APP_KEY') (см. clear_env = no в www.conf)
       APP_KEY: ${APP_KEY:-}
+      APP_METRICS_ENABLED: ${APP_METRICS_ENABLED:-0}
     volumes:
-      # Без :ro - сюда пишет composer install (vendor/) и SQLite-файл БД
       - ./app:/var/www/html
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
       - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
     healthcheck:
-      # Дёргаем встроенный ping-эндпоинт php-fpm через FastCGI напрямую, без nginx
       test: ["CMD-SHELL", "SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: ${DOCKERHUB_NAMESPACE}/devops-course-php:${IMAGE_TAG}
+    environment:
+      APP_KEY: ${APP_KEY:-}
+      APP_METRICS_ENABLED: ${APP_METRICS_ENABLED:-0}
+    working_dir: /var/www/html
+    volumes:
+      - ./app:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+      - ./docker/scheduler.sh:/usr/local/bin/scheduler.sh:ro
+    command: ["sh", "/usr/local/bin/scheduler.sh"]
+    restart: unless-stopped
+
+volumes: {}

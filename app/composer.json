@@ -4,11 +4,17 @@
     "type": "project",
     "require": {
         "php": ">=8.5",
+        "ext-pdo": "*",
         "ext-pdo_sqlite": "*",
+        "ext-session": "*",
         "illuminate/database": "^13.34",
         "robmorgan/phinx": "^0.16.12",
         "monolog/monolog": "^3.12",
-        "symfony/yaml": "^8.1"
+        "symfony/yaml": "^8.1",
+        "promphp/prometheus_client_php": "^2.15"
+    },
+    "suggest": {
+        "ext-apcu": "Нужен для сбора метрик приложения (APP_METRICS_ENABLED=1): счётчики должны быть общими для всех воркеров php-fpm"
     },
     "autoload": {
         "psr-4": {

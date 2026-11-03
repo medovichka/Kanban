@@ -2,16 +2,6 @@
 
 declare(strict_types=1);
 
-/*
- * Утилита для работы с зашифрованными значениями конфига.
- *
- * Примеры (запускать из каталога app/):
- *   php config/secret.php key                 # сгенерировать новый APP_KEY
- *   php config/secret.php encrypt "пароль"    # зашифровать значение для конфига
- *   php config/secret.php decrypt "enc:..."   # расшифровать значение
- *   php config/secret.php check               # проверить APP_KEY и загрузку конфига
- */
-
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Config;

@@ -1,0 +1,79 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: nginx
+    static_configs:
+      - targets: ["nginx-exporter:9113"]
+
+  - job_name: php-fpm
+    static_configs:
+      - targets: ["php-fpm-exporter:9253"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: app
+    metrics_path: /metrics.php
+    static_configs:
+      - targets: ["nginx:8081"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  - job_name: blackbox-exporter
+    static_configs:
+      - targets: ["blackbox-exporter:9115"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    relabel_configs:
+      - source_labels: [container]
+        regex: ".+"
+        action: keep
+
+  - job_name: blackbox-health
+    metrics_path: /probe
+    params:
+      module: [http_health]
+    static_configs:
+      - targets: ["http://nginx/health.php"]
+    relabel_configs: &blackbox_relabel
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-nginx
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://nginx/nginx-health"]
+    relabel_configs: *blackbox_relabel
+
+  - job_name: blackbox-external
+    metrics_path: /probe
+    params:
+      module: [http_health_strict]
+    static_configs:
+      - targets: ["http://host.docker.internal:8080/health.php"]
+    relabel_configs: *blackbox_relabel
