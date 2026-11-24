@@ -150,6 +150,33 @@ $router->group(['prefix' => '/api', 'middleware' => [Authenticate::class], 'name
 Проверить маршрутизацию без nginx и без БД: `php tests/smoke.php`
 (маршруты, 405/404, cron-выражения, Response).
 
+### MVC-запросы, ответы и авторизация
+
+```
+app/src/Mvc/Request/
+  Parameter.php                 параметр-валидатор: normalize() + validate()
+  Parameters/                   StringParameter, EmailParameter, PasswordParameter
+  AbstractRequest.php           параметры, валидация, values()/errors(), execute()
+app/src/Mvc/Response/
+  ResponseModel.php             модель ответа: toResponse(), сессия/cookie
+  HtmlResponse.php              HTML-ответ
+  RedirectResponse.php          редирект
+  JsonResponse.php              JSON-ответ
+app/src/Http/Requests/          RegisterRequest, LoginRequest, LogoutRequest — параметры + полезная нагрузка
+app/src/Auth/
+  Authenticator.php             пользователь из сессии, регистрация, вход, выход
+  AuthResult.php                результат авторизации: user, session, errors
+app/src/Http/Controllers/FrontendController.php  register/login/logout
+```
+
+Маршрут может задать действие через атрибут `action`; `Router` передаёт его
+в `Controller::before()`, а `FrontendController::handle()` вызывает нужный
+метод. Параметры формы проверяются до `execute()`: `AbstractRequest`
+собирает значения через валидаторы, а контроллер при ошибках сохраняет
+сообщения и старые значения в flash-сессию. Авторизация вынесена в
+`Authenticator` и работает поверх `SessionManager`; `InteractsWithSession`
+и middleware `Authenticate` используют его же.
+
 ## Запуск
 
 ```bash
@@ -193,7 +220,7 @@ app/                 приложение (PSR-4 App\ → src/)
   db/migrations/     phinx-миграции (пользователи, борды… + sessions/session_data + cron_*)
   instrumentation/   метрики для Prometheus (no-op, если APP_METRICS_ENABLED != 1)
   public/            index.php (ядро), health.php, metrics.php (внутренний порт 8081)
-  src/               Bootstrap, Container, Cron, Database, Http, Models, Routing, Session
+  src/               Bootstrap, Container, Cron, Database, Http, Models, Routing, Session, Auth, Mvc
   tests/smoke.php    самопроверка без зависимостей
 docker/              php/ (Dockerfile + apcu), nginx/ (в т. ч. status.conf :8081), scheduler.sh
 monitoring/          задание 2: Prometheus, rules, Alertmanager, blackbox, Grafana, runbooks

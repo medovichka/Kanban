@@ -7,11 +7,9 @@ use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\CronPanelController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FrontendController;
 use App\Http\Controllers\HomeController;
-use App\Http\Controllers\LoginController;
-use App\Http\Controllers\LogoutController;
 use App\Http\Controllers\PagesController;
-use App\Http\Controllers\RegisterController;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\VerifyCsrfToken;
 use App\Routing\Router;
@@ -21,18 +19,30 @@ return static function (Router $router): void {
     $router->add(['GET'], '/about', PagesController::class, ['name' => 'about']);
     $router->add(['GET'], '/cron/status', CronPanelController::class, ['name' => 'cron.panel']);
 
-    $router->add(['GET'], '/register', RegisterController::class, ['name' => 'register.form']);
+    $router->add(['GET'], '/register', FrontendController::class, [
+        'name' => 'register.form',
+        'action' => 'register',
+    ]);
 
-    $router->add(['POST'], '/register', RegisterController::class, [
+    $router->add(['POST'], '/register', FrontendController::class, [
         'name' => 'register.store',
+        'action' => 'register',
         'middleware' => [VerifyCsrfToken::class],
     ]);
 
-    $router->add(['GET'], '/login', LoginController::class, ['name' => 'login.form']);
-    $router->add(['POST'], '/login', LoginController::class, ['name' => 'login.store']);
+    $router->add(['GET'], '/login', FrontendController::class, [
+        'name' => 'login.form',
+        'action' => 'login',
+    ]);
+    $router->add(['POST'], '/login', FrontendController::class, [
+        'name' => 'login.store',
+        'action' => 'login',
+        'middleware' => [VerifyCsrfToken::class],
+    ]);
 
-    $router->add(['POST'], '/logout', LogoutController::class, [
+    $router->add(['POST'], '/logout', FrontendController::class, [
         'name' => 'logout',
+        'action' => 'logout',
         'middleware' => [VerifyCsrfToken::class],
     ]);
 

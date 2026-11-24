@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use App\Auth\Authenticator;
 use App\Container;
 use App\Models\User;
 use App\Session\Session;
@@ -14,6 +15,11 @@ trait InteractsWithSession
     private ?Session $currentSession = null;
 
     private bool $currentSessionLoaded = false;
+
+    protected function auth(): Authenticator
+    {
+        return $this->service(Authenticator::class);
+    }
 
     protected function sessions(): SessionManager
     {
@@ -29,9 +35,7 @@ trait InteractsWithSession
         }
 
         $this->currentSessionLoaded = true;
-        $id = (string) $this->request->cookie($this->sessions()->cookieName(), '');
-
-        $this->currentSession = $id !== '' ? $this->sessions()->find($id) : null;
+        $this->currentSession = $this->auth()->session($this->request);
 
         return $this->currentSession;
     }
@@ -44,7 +48,7 @@ trait InteractsWithSession
             return $session;
         }
 
-        $this->currentSession = $this->sessions()->start(0);
+        $this->currentSession = $this->auth()->sessionOrStart($this->request);
         $this->currentSessionLoaded = true;
 
         return $this->currentSession;
@@ -52,20 +56,12 @@ trait InteractsWithSession
 
     protected function user(): ?User
     {
-        $session = $this->session();
-
-        if ($session === null || $session->userId <= 0) {
-            return null;
-        }
-
-        $user = User::query()->find($session->userId);
-
-        return $user;
+        return $this->auth()->user($this->request);
     }
 
     protected function startSessionInternal(User $user, array $attributes = []): Session
     {
-        $this->currentSession = $this->sessions()->start((int) $user->getKey(), $attributes);
+        $this->currentSession = $this->auth()->startSession($user, $attributes);
         $this->currentSessionLoaded = true;
 
         return $this->currentSession;

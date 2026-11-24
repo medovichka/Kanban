@@ -12,6 +12,7 @@ use App\Http\Request;
 use App\Http\Response;
 use App\Http\View;
 use App\Models\User;
+use App\Session\SessionManager;
 
 class HomeController extends Controller
 {
@@ -48,7 +49,10 @@ class HomeController extends Controller
             $this->logger()->error('Home: failed to read tables', ['exception' => $e]);
         }
 
-        $body = View::nav($user?->displayName());
+        $body = View::nav(
+            $user?->displayName(),
+            $session !== null ? SessionManager::csrfToken($session) : null,
+        );
         $body .= '<h1>' . $this->h((string) Config::get('app.name', 'Kanban')) . '</h1>';
 
         if (isset($flashes['success'])) {

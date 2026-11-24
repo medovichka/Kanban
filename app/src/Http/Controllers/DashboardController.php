@@ -43,7 +43,7 @@ final class DashboardController extends Controller
             ->get()
             ->all();
 
-        $body = View::nav($user->displayName()) . '<h1>Личный кабинет</h1>';
+        $body = View::nav($user->displayName(), SessionManager::csrfToken($session)) . '<h1>Личный кабинет</h1>';
 
         if (isset($flashes['success'])) {
             $body .= '<p class="notice notice-ok">' . $this->h((string) $flashes['success']) . '</p>';

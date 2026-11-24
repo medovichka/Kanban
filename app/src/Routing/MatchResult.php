@@ -18,6 +18,7 @@ final class MatchResult
         public readonly array $parameters = [],
         public readonly array $middleware = [],
         public readonly string $name = '',
+        public readonly ?string $action = null,
     ) {
     }
 

@@ -67,11 +67,14 @@ final class Router
                 $name = $route->name() ?? self::defaultName($route);
                 $this->matchedName = $name;
 
+                $action = $route->attribute('action');
+
                 return new MatchResult(
                     $route->controller,
                     $route->extractParameters($path),
                     $item['middleware'],
                     $name,
+                    is_string($action) ? $action : null,
                 );
             }
 
@@ -98,7 +101,7 @@ final class Router
         }
 
         $controller = $match->createController();
-        $controller->before($request, $match->parameters);
+        $controller->before($request, $match->parameters, $match->action);
 
         try {
             $response = $match->run($request, $controller, $container);

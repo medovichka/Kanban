@@ -46,13 +46,20 @@ final class View
             . "\n" . $body . "\n</body>\n</html>\n";
     }
 
-    public static function nav(?string $userName): string
+    public static function nav(?string $userName, ?string $csrfToken = null): string
     {
         $links = '<a href="/">Главная</a><a href="/dashboard">Кабинет</a><a href="/cron/status">Cron</a>';
 
-        return $userName === null
-            ? '<nav>' . $links . '<a href="/login">Вход</a><a href="/register">Регистрация</a></nav>'
-            : '<nav>' . $links . '<span>Вы: ' . htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') . '</span>'
-                . '<form method="post" action="/logout" style="display:inline"><button class="muted" type="submit">Выйти</button></form></nav>';
+        if ($userName === null) {
+            return '<nav>' . $links . '<a href="/login">Вход</a><a href="/register">Регистрация</a></nav>';
+        }
+
+        $csrf = $csrfToken === null
+            ? ''
+            : '<input type="hidden" name="_csrf" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '">';
+
+        return '<nav>' . $links . '<span>Вы: ' . htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') . '</span>'
+            . '<form method="post" action="/logout" style="display:inline">' . $csrf
+            . '<button class="muted" type="submit">Выйти</button></form></nav>';
     }
 }

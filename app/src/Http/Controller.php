@@ -12,12 +12,20 @@ abstract class Controller
 
     protected array $parameters = [];
 
+    protected ?string $action = null;
+
     abstract public function handle(Request $request): Response;
 
-    public function before(Request $request, array $parameters = []): void
+    public function before(Request $request, array $parameters = [], ?string $action = null): void
     {
         $this->request = $request;
         $this->parameters = $parameters;
+        $this->action = $action;
+    }
+
+    public function action(): ?string
+    {
+        return $this->action;
     }
 
     public function after(Request $request, Response $response): ?Response
